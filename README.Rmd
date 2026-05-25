@@ -35,21 +35,21 @@ Feature highlights:
 
 See **the papers**, [detailed docs on docs.rs](https://docs.rs/sassy/latest/sassy/), and corresponding evals in [evals/](evals/):
 
-> Rick Beeloo and Ragnar Groot Koerkamp.  
-> Sassy2: Batch Searching of Short DNA Patterns  
-> bioRxiv, March 2026.  
+> Rick Beeloo and Ragnar Groot Koerkamp.
+> Sassy2: Batch Searching of Short DNA Patterns
+> bioRxiv, March 2026.
 > https://doi.org/10.64898/2026.03.10.710811
 
 and
 
-> Rick Beeloo and Ragnar Groot Koerkamp.  
-> Sassy: Fuzzy Searching DNA Sequences using SIMD  
-> bioRxiv, July 2025.  
+> Rick Beeloo and Ragnar Groot Koerkamp.
+> Sassy: Fuzzy Searching DNA Sequences using SIMD
+> bioRxiv, July 2025.
 > https://doi.org/10.1101/2025.07.22.666207
 
 ## Installation
 
-### Prebuilt binaries 
+### Prebuilt binaries
 See the latest [release](https://github.com/RagnarGrootKoerkamp/sassy/releases).
 
 You can also get these via
@@ -179,7 +179,7 @@ TTAAATA
 sassy search --pattern-fasta patterns.fasta -k 1 text.fasta
 ```
 
-If your `patterns.fasta` has many patterns (>8) which are equally long and <=64bp enable V2 
+If your `patterns.fasta` has many patterns (>8) which are equally long and <=64bp enable V2
 `--v2` for higher throughput:
 
 ```bash
@@ -279,7 +279,7 @@ GAGTCCGAGCAGAAGAAGAANGG  chr21    5     -       46396975  46396998  CAGTCCCAGCAG
 
 The `start` and `end` are 0-based open-ended (i.e. 0-based inclusive of the
 start, but exclusive of the end), and `start` is always less than `end`
-(regardless of the strand).  The 
+(regardless of the strand).  The
 `match_region` reported will be the sequence from the target file when `strand` is `+`, or the reverse complement
 of the sequence from the target file when `strand` is `-`, so that it matches the `guide` sequence.
 The `cigar` is always oriented to read left-to-right with the provided guide and `match_region` sequences.
@@ -293,7 +293,7 @@ If binding sites are to be found, please reverse-complement the input or output 
 PyPI wheels can be installed with:
 
 ```bash
-pip install sassy-rs 
+pip install sassy-rs
 ```
 
 ```python
