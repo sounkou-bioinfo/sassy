@@ -1,0 +1,42 @@
+TARGET_DIR = ./rust/target
+LIBDIR = $(TARGET_DIR)/release
+STATLIB = $(LIBDIR)/librsassy_rust.a
+PKG_LIBS = -L$(LIBDIR) -lrsassy_rust
+
+all: $(SHLIB) rust_clean
+
+.PHONY: $(STATLIB)
+
+$(SHLIB): $(STATLIB)
+
+CARGOTMP = $(CURDIR)/.cargo
+VENDOR_DIR = vendor
+
+$(STATLIB):
+	CARGO_FLAGS=""; \
+	CARGO_FEATURE_ARGS=""; \
+	if [ -n "$$SASSY_RUST_FEATURES" ]; then \
+		CARGO_FEATURE_ARGS="--no-default-features --features $$SASSY_RUST_FEATURES"; \
+		echo "=== Using Rust crate features: $$SASSY_RUST_FEATURES ==="; \
+	fi; \
+	if [ -d ./vendor ]; then \
+		echo "=== Using offline Rust vendor directory ==="; \
+		mkdir -p $(CARGOTMP); \
+		cp rust/vendor-config.toml $(CARGOTMP)/config.toml; \
+		CARGO_FLAGS="--offline -j 2"; \
+	elif [ -f ./rust/vendor.tar.xz ]; then \
+		echo "=== Using offline Rust vendor tarball ==="; \
+		tar xf rust/vendor.tar.xz; \
+		mkdir -p $(CARGOTMP); \
+		cp rust/vendor-config.toml $(CARGOTMP)/config.toml; \
+		CARGO_FLAGS="--offline -j 2"; \
+	fi; \
+	export CARGO_HOME=$(CARGOTMP); \
+	export PATH="$(PATH):$(HOME)/.cargo/bin"; \
+	RUSTFLAGS="$(RUSTFLAGS) --print=native-static-libs" cargo build $$CARGO_FLAGS $$CARGO_FEATURE_ARGS --lib --release --manifest-path=./rust/Cargo.toml --target-dir=$(TARGET_DIR)
+
+rust_clean: $(SHLIB)
+	rm -Rf $(CARGOTMP) $(VENDOR_DIR) $(TARGET_DIR)
+
+clean:
+	rm -Rf $(SHLIB) $(STATLIB) $(OBJECTS) $(CARGOTMP) $(VENDOR_DIR) $(TARGET_DIR)

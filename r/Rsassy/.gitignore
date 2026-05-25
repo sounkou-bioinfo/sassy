@@ -1,0 +1,9 @@
+.Rproj.user
+.Rhistory
+.RData
+src/.cargo
+src/vendor
+src/rust/vendor
+src/rust/target
+*.tar.gz
+*.Rcheck
