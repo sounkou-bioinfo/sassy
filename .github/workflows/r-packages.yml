@@ -60,7 +60,7 @@ jobs:
             ${{ matrix.package.name }}_*.tar.gz
 
   benchmark-r-bindings:
-    name: Benchmark Rsassy vs sassyRS
+    name: Benchmark Rsassy, sassyRS, and Python sassy
     runs-on: ubuntu-latest
     needs: r-cmd-check
 
@@ -77,6 +77,12 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.11"
+          enable-cache: true
+
       - name: Set up Pandoc
         uses: r-lib/actions/setup-pandoc@v2
 
@@ -88,7 +94,10 @@ jobs:
       - name: Install R benchmark dependencies
         shell: Rscript {0}
         run: |
-          install.packages(c("tinytest", "rmarkdown"))
+          install.packages(c("tinytest", "rmarkdown", "reticulate"))
+
+      - name: Prepare Python benchmark environment
+        run: uv venv --python 3.11 .venv-benchmark && uv pip install --python .venv-benchmark sassy-rs
 
       - name: Run binding benchmark report
         env:
@@ -96,16 +105,18 @@ jobs:
           RUSTFLAGS: "-C target-cpu=native"
           SASSY_RUST_FEATURES: native-simd
           SASSY_R_BENCH_BATCHES: 5
-          SASSY_R_BENCH_ITERS: 25
-          SASSY_R_BENCH_TEXT_MULTIPLIER: 500
+          SASSY_R_BENCH_ITERS: 10
+          SASSY_R_BENCH_TEXT_LENGTH: 1000000
           SASSY_R_BENCH_OUT: benchmark-results/r-bindings.csv
         run: |
           mkdir -p benchmark-results
+          R CMD INSTALL r/Rsassy
+          R CMD INSTALL r/sassyRS
+          export RETICULATE_PYTHON="$PWD/.venv-benchmark/bin/python"
           Rscript - <<'RSCRIPT'
           rmarkdown::render(
             "r/benchmarks/benchmark-r-bindings.Rmd",
             output_format = "html_document",
-            params = list(install = TRUE),
             output_dir = "benchmark-results",
             output_file = "r-bindings.html",
             envir = new.env(parent = globalenv())
@@ -113,7 +124,6 @@ jobs:
           rmarkdown::render(
             "r/benchmarks/benchmark-r-bindings.Rmd",
             output_format = "github_document",
-            params = list(install = FALSE),
             output_dir = "benchmark-results",
             output_file = "r-bindings.md",
             envir = new.env(parent = globalenv())

@@ -1,0 +1,79 @@
+
+<!-- README.md is generated from README.Rmd. Please edit that file. -->
+
+# sassyRS
+
+`sassyRS` is an experimental [`extendr`](https://extendr.github.io/)
+binding to the Rust
+[`sassy`](https://github.com/RagnarGrootKoerkamp/sassy) approximate
+string matcher. It exposes a compact R data-frame interface and is
+useful as a comparison point for the lower-level C/API based
+[`Rsassy`](../Rsassy) binding.
+
+## Installation
+
+From the repository root:
+
+``` sh
+R CMD INSTALL r/sassyRS
+```
+
+For local benchmarking on the current machine, compile with native CPU
+features:
+
+``` sh
+RUSTFLAGS="-C target-cpu=native" \
+SASSY_RUST_FEATURES=native-simd \
+R CMD INSTALL r/sassyRS
+```
+
+System requirements are Cargo, `rustc >= 1.91`, and `xz`.
+
+## Usage
+
+``` r
+library(sassyRS)
+
+sassy_search(
+  pattern = "ACGT",
+  text = "TTACGTAA",
+  k = 0,
+  alphabet = "dna",
+  rc = FALSE
+)
+#>   text_start text_end pattern_start pattern_end cost strand
+#> 1          2        6             0           4    0      +
+```
+
+Raw vectors are accepted by the R wrapper and converted for the
+`extendr` call:
+
+``` r
+sassy_search(
+  charToRaw("ACGT"),
+  charToRaw("TTACGTAA"),
+  k = 0,
+  alphabet = "dna",
+  rc = FALSE
+)
+#>   text_start text_end pattern_start pattern_end cost strand
+#> 1          2        6             0           4    0      +
+```
+
+The returned data frame uses 0-based, half-open coordinates:
+`text_start`, `text_end`, `pattern_start`, and `pattern_end`.
+
+## Testing
+
+`sassyRS` uses `tinytest`:
+
+``` sh
+Rscript -e 'tinytest::test_package("sassyRS")'
+```
+
+## Benchmark
+
+The binding benchmark is in
+[`../benchmarks/benchmark-r-bindings.Rmd`](../benchmarks/benchmark-r-bindings.Rmd),
+with a rendered GitHub Markdown report at
+[`../benchmarks/benchmark-r-bindings.md`](../benchmarks/benchmark-r-bindings.md).
