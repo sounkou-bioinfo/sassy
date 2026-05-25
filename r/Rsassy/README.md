@@ -68,6 +68,18 @@ sassy_search(
 #> 1          2        6             0           4    0      +
 ```
 
+Open R connections can also be searched through the C boundary. Rsassy
+uses R’s experimental connection API internally here, so the R side does
+not loop over `readBin()` or `readChar()`:
+
+``` r
+con <- rawConnection(charToRaw("TTACGTAA"), "rb")
+sassy_search_connection("ACGT", con, k = 0, alphabet = "dna", rc = FALSE, chunk_size = 3)
+#>   text_start text_end pattern_start pattern_end cost strand
+#> 1          2        6             0           4    0      +
+close(con)
+```
+
 The returned data frame uses 0-based, half-open coordinates:
 `text_start`, `text_end`, `pattern_start`, and `pattern_end`.
 

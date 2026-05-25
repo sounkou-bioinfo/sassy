@@ -29,6 +29,48 @@ check_sassy_alpha <- function(alpha) {
   alpha
 }
 
+sassy_sequence_nbytes <- function(x, arg) {
+  if (is.raw(x)) {
+    return(length(x))
+  }
+  if (!is.character(x) || length(x) != 1L || is.na(x)) {
+    stop(arg, " must be a raw vector or a non-missing character scalar", call. = FALSE)
+  }
+  nchar(enc2utf8(x), type = "bytes")
+}
+
+empty_sassy_matches <- function() {
+  out <- data.frame(
+    text_start = numeric(),
+    text_end = numeric(),
+    pattern_start = numeric(),
+    pattern_end = numeric(),
+    cost = integer(),
+    strand = character(),
+    stringsAsFactors = FALSE
+  )
+  class(out) <- c("sassy_matches", "data.frame")
+  out
+}
+
+sassy_tail_raw <- function(x, n) {
+  n <- min(length(x), n)
+  if (n <= 0L) {
+    return(raw())
+  }
+  x[seq.int(length(x) - n + 1L, length(x))]
+}
+
+rbind_sassy_matches <- function(parts) {
+  if (!length(parts)) {
+    return(empty_sassy_matches())
+  }
+  out <- do.call(rbind, unname(parts))
+  row.names(out) <- NULL
+  class(out) <- c("sassy_matches", "data.frame")
+  out
+}
+
 #' Create a reusable 'sassy' searcher
 #'
 #' @param alphabet Alphabet profile. One of `"dna"`, `"iupac"`, or `"ascii"`.
@@ -90,4 +132,63 @@ sassy_search <- function(pattern, text, k, alphabet = c("dna", "iupac", "ascii")
 #' @export
 sassy_search_all <- function(pattern, text, k, alphabet = c("dna", "iupac", "ascii"), rc = TRUE, alpha = NULL) {
   sassy_search(pattern = pattern, text = text, k = k, alphabet = alphabet, rc = rc, alpha = alpha, all = TRUE)
+}
+
+#' Search an R connection with 'sassy'
+#'
+#' Streams bytes from an already-open readable R connection through the C/R API
+#' boundary. This avoids an R-level `readBin()`/`readChar()` loop while still
+#' preserving matches that cross chunk boundaries by keeping an overlap window.
+#'
+#' @inheritParams sassy_search
+#' @param con An open readable R connection, preferably opened in binary mode.
+#' @param chunk_size Number of new bytes to read per native chunk.
+#' @param overlap Number of bytes to carry from one chunk to the next. Defaults
+#'   to `pattern_bytes + k` without overhang, and `2 * pattern_bytes + k` when
+#'   `alpha` is set.
+#' @return A data frame of matches with coordinates relative to the full stream.
+#' @export
+sassy_search_connection <- function(pattern,
+                                    con,
+                                    k,
+                                    alphabet = c("dna", "iupac", "ascii"),
+                                    rc = TRUE,
+                                    alpha = NULL,
+                                    all = FALSE,
+                                    chunk_size = 1024 * 1024,
+                                    overlap = NULL) {
+  if (!inherits(con, "connection")) {
+    stop("con must be an R connection", call. = FALSE)
+  }
+  if (!isOpen(con, "read")) {
+    stop("con must be open for reading, preferably in binary mode", call. = FALSE)
+  }
+
+  pattern_bytes <- sassy_sequence_nbytes(pattern, "pattern")
+  k <- check_sassy_k(k)
+  alpha <- check_sassy_alpha(alpha)
+  if (is.null(overlap)) {
+    overlap <- if (is.nan(alpha)) pattern_bytes + k else 2L * pattern_bytes + k
+  }
+  if (!is.numeric(chunk_size) || length(chunk_size) != 1L || is.na(chunk_size) || chunk_size < 1) {
+    stop("chunk_size must be a positive number", call. = FALSE)
+  }
+  if (!is.numeric(overlap) || length(overlap) != 1L || is.na(overlap) || overlap < 0) {
+    stop("overlap must be a non-negative number", call. = FALSE)
+  }
+
+  searcher <- sassy_searcher(alphabet = alphabet, rc = rc, alpha = if (is.nan(alpha)) NULL else alpha)
+  out <- .Call(
+    "RC_sassy_searcher_search_connection",
+    searcher,
+    as_sassy_sequence(pattern, "pattern"),
+    con,
+    k,
+    isTRUE(all),
+    as.numeric(chunk_size),
+    as.numeric(overlap),
+    PACKAGE = "Rsassy"
+  )
+  class(out) <- c("sassy_matches", "data.frame")
+  out
 }

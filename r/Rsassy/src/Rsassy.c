@@ -1,11 +1,16 @@
 #include <R.h>
 #include <R_ext/Rdynload.h>
 #include <Rinternals.h>
+/* R_ext/Connections.h is R's experimental connection API. Rsassy keeps all
+ * connection access isolated in this file so higher-level R code does not need
+ * readBin()/readChar() loops for streaming input. */
+#include <R_ext/Connections.h>
 
 #include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 
 #ifndef SIZE_MAX
 #define SIZE_MAX ((size_t)-1)
@@ -135,6 +140,33 @@ static RsassySearcher *Rsassy_searcher_from_xptr(SEXP xp) {
     return searcher;
 }
 
+struct RsassyMatchVec {
+    RsassyMatch *data;
+    uintptr_t len;
+    uintptr_t cap;
+};
+
+static void Rsassy_match_vec_free(struct RsassyMatchVec *vec) {
+    free(vec->data);
+    vec->data = NULL;
+    vec->len = 0;
+    vec->cap = 0;
+}
+
+static void Rsassy_match_vec_push(struct RsassyMatchVec *vec, RsassyMatch match) {
+    if (vec->len == vec->cap) {
+        uintptr_t new_cap = vec->cap == 0 ? 64 : vec->cap * 2;
+        RsassyMatch *new_data = (RsassyMatch *)realloc(vec->data, (size_t)new_cap * sizeof(RsassyMatch));
+        if (new_data == NULL) {
+            Rsassy_match_vec_free(vec);
+            Rf_error("failed to allocate match accumulator");
+        }
+        vec->data = new_data;
+        vec->cap = new_cap;
+    }
+    vec->data[vec->len++] = match;
+}
+
 static SEXP Rsassy_matches_data_frame(const RsassyMatch *matches, uintptr_t n) {
     if ((uint64_t)n > (uint64_t)INT_MAX) {
         Rf_error("too many matches to return as an R data frame");
@@ -219,9 +251,112 @@ SEXP RC_sassy_searcher_search(SEXP searcher_s, SEXP pattern_s, SEXP text_s, SEXP
     return out;
 }
 
+SEXP RC_sassy_searcher_search_connection(SEXP searcher_s,
+                                         SEXP pattern_s,
+                                         SEXP connection_s,
+                                         SEXP k_s,
+                                         SEXP all_s,
+                                         SEXP chunk_size_s,
+                                         SEXP overlap_s) {
+    RsassySearcher *searcher = Rsassy_searcher_from_xptr(searcher_s);
+    struct RsassySeqView pattern = Rsassy_sequence_view(pattern_s, "pattern");
+
+    int k = Rf_asInteger(k_s);
+    if (k == NA_INTEGER || k < 0) {
+        Rf_error("k must be a non-negative integer");
+    }
+    int all = Rf_asLogical(all_s);
+    if (all == NA_LOGICAL) {
+        Rf_error("all must be TRUE or FALSE");
+    }
+
+    double chunk_size_d = Rf_asReal(chunk_size_s);
+    double overlap_d = Rf_asReal(overlap_s);
+    if (!R_FINITE(chunk_size_d) || chunk_size_d < 1 || chunk_size_d > (double)SIZE_MAX) {
+        Rf_error("chunk_size must be a positive finite size");
+    }
+    if (!R_FINITE(overlap_d) || overlap_d < 0 || overlap_d > (double)SIZE_MAX) {
+        Rf_error("overlap must be a non-negative finite size");
+    }
+
+    size_t chunk_size = (size_t)chunk_size_d;
+    size_t overlap = (size_t)overlap_d;
+    if (overlap > SIZE_MAX - chunk_size) {
+        Rf_error("chunk_size + overlap is too large for this platform");
+    }
+
+    Rconnection con = R_GetConnection(connection_s);
+    if (con == NULL) {
+        Rf_error("con must be an R connection");
+    }
+    if (!con->isopen || !con->canread) {
+        Rf_error("con must be an open readable connection, preferably opened in binary mode");
+    }
+
+    uint8_t *window = (uint8_t *)malloc(chunk_size + overlap);
+    if (window == NULL) {
+        Rf_error("failed to allocate streaming buffer");
+    }
+
+    struct RsassyMatchVec acc = {0};
+    size_t carry_len = 0;
+    uintptr_t bytes_read_total = 0;
+
+    for (;;) {
+        size_t n_read = R_ReadConnection(con, window + carry_len, chunk_size);
+        if (n_read == 0) {
+            break;
+        }
+
+        uintptr_t chunk_start = bytes_read_total - (uintptr_t)carry_len;
+        uintptr_t new_bytes_start = bytes_read_total;
+        uintptr_t chunk_len = (uintptr_t)(carry_len + n_read);
+        bytes_read_total += (uintptr_t)n_read;
+
+        RsassyMatch *matches = NULL;
+        uintptr_t n_matches = 0;
+        if (rsassy_searcher_search(searcher,
+                                   pattern.data,
+                                   pattern.len,
+                                   window,
+                                   chunk_len,
+                                   (uintptr_t)k,
+                                   all == TRUE,
+                                   &matches,
+                                   &n_matches) != 0) {
+            free(window);
+            Rsassy_match_vec_free(&acc);
+            Rsassy_stop_last_error();
+        }
+
+        for (uintptr_t i = 0; i < n_matches; i++) {
+            RsassyMatch match = matches[i];
+            uintptr_t global_end = chunk_start + match.text_end;
+            if (global_end <= new_bytes_start) {
+                continue;
+            }
+            match.text_start += chunk_start;
+            match.text_end = global_end;
+            Rsassy_match_vec_push(&acc, match);
+        }
+        rsassy_matches_free(matches, n_matches);
+
+        carry_len = overlap < (size_t)chunk_len ? overlap : (size_t)chunk_len;
+        if (carry_len > 0) {
+            memmove(window, window + chunk_len - carry_len, carry_len);
+        }
+    }
+
+    free(window);
+    SEXP out = Rsassy_matches_data_frame(acc.data, acc.len);
+    Rsassy_match_vec_free(&acc);
+    return out;
+}
+
 static const R_CallMethodDef CallEntries[] = {
     {"RC_sassy_searcher_new", (DL_FUNC)&RC_sassy_searcher_new, 3},
     {"RC_sassy_searcher_search", (DL_FUNC)&RC_sassy_searcher_search, 5},
+    {"RC_sassy_searcher_search_connection", (DL_FUNC)&RC_sassy_searcher_search_connection, 7},
     {NULL, NULL, 0}
 };
 

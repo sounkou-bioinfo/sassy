@@ -1,5 +1,6 @@
 useDynLib(Rsassy, .registration = TRUE)
 export(sassy_search)
 export(sassy_search_all)
+export(sassy_search_connection)
 export(sassy_searcher)
 export(sassy_searcher_search)
