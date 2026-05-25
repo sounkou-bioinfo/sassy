@@ -17,5 +17,6 @@ c/sassy_example
 /evals/src/sassy2/data/downloaded/*
 python/sassy/__init__.pyi
 /r/benchmarks/results/
+/r/benchmarks/benchmark-r-bindings.html
 *.tar.gz
 *.Rcheck/

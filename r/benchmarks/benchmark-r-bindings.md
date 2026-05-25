@@ -1,33 +1,22 @@
----
-title: "Rsassy vs sassyRS benchmark"
-output:
-  html_document:
-    toc: true
-    toc_depth: 2
-  github_document:
-    toc: true
-    toc_depth: 2
-params:
-  install: false
-  batches: 7
-  iterations: 50
-  text_multiplier: 1000
-  warmup: 3
-  output: "r/benchmarks/results/r-bindings.csv"
----
+Rsassy vs sassyRS benchmark
+================
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
-```
+- [Package setup](#package-setup)
+- [Machine and build details](#machine-and-build-details)
+- [Benchmark configuration](#benchmark-configuration)
+- [Benchmark](#benchmark)
+- [Summary](#summary)
 
 This report benchmarks the two R bindings in this repository:
 
-- **Rsassy**: a C/R API boundary intended for explicit raw-vector and future ALTREP access.
+- **Rsassy**: a C/R API boundary intended for explicit raw-vector and
+  future ALTREP access.
 - **sassyRS**: an `extendr` boundary prototype.
 
-The benchmark uses a fixed DNA pattern and target text, then reports elapsed seconds per call.
+The benchmark uses a fixed DNA pattern and target text, then reports
+elapsed seconds per call.
 
-```{r helpers}
+``` r
 get_int_env <- function(name, default) {
   value <- Sys.getenv(name, unset = "")
   if (identical(value, "")) {
@@ -82,7 +71,7 @@ run <- function(cmd, args) {
 
 ## Package setup
 
-```{r package-setup}
+``` r
 if (isTRUE(params$install)) {
   bench_lib <- tempfile("sassy-r-bindings-lib-")
   dir.create(bench_lib, recursive = TRUE)
@@ -91,6 +80,9 @@ if (isTRUE(params$install)) {
   run(file.path(R.home("bin"), "R"), c("CMD", "INSTALL", "-l", bench_lib, file.path(repo_root, "r", "Rsassy")))
   run(file.path(R.home("bin"), "R"), c("CMD", "INSTALL", "-l", bench_lib, file.path(repo_root, "r", "sassyRS")))
 }
+#> Installing benchmark packages into /tmp/RtmpheLVTf/sassy-r-bindings-lib-2f18c82c5fb109
+#> $ /usr/lib/R/bin/R CMD INSTALL -l /tmp/RtmpheLVTf/sassy-r-bindings-lib-2f18c82c5fb109 /root/sassy/r/Rsassy
+#> $ /usr/lib/R/bin/R CMD INSTALL -l /tmp/RtmpheLVTf/sassy-r-bindings-lib-2f18c82c5fb109 /root/sassy/r/sassyRS
 
 if (!requireNamespace("Rsassy", quietly = TRUE)) {
   stop("Package 'Rsassy' is not installed. Render with params = list(install = TRUE).", call. = FALSE)
@@ -103,10 +95,11 @@ if (!requireNamespace("sassyRS", quietly = TRUE)) {
 ## Machine and build details
 
 The benchmark workflow sets `RUSTFLAGS=-C target-cpu=native` and
-`SASSY_RUST_FEATURES=native-simd` so the Rust crates are compiled for the
-runner CPU instead of the portable scalar fallback used for CRAN-style checks.
+`SASSY_RUST_FEATURES=native-simd` so the Rust crates are compiled for
+the runner CPU instead of the portable scalar fallback used for
+CRAN-style checks.
 
-```{r machine-details}
+``` r
 safe_system <- function(cmd, args = character()) {
   if (!nzchar(Sys.which(cmd))) {
     return(character())
@@ -143,11 +136,29 @@ machine <- data.frame(
   stringsAsFactors = FALSE
 )
 machine
+#>                  field                               value
+#> 1               system                               Linux
+#> 2              release                    6.8.0-78-generic
+#> 3              machine                              x86_64
+#> 4                    R        R version 4.6.0 (2026-04-24)
+#> 5             platform                 x86_64-pc-linux-gnu
+#> 6             NOT_CRAN                                true
+#> 7            RUSTFLAGS                -C target-cpu=native
+#> 8  SASSY_RUST_FEATURES                         native-simd
+#> 9                cargo cargo 1.91.1 (ea2d97820 2025-10-10)
+#> 10               rustc rustc 1.91.1 (ed61e7d7e 2025-11-07)
 
 rust_verbose <- safe_system("rustc", "-vV")
 if (length(rust_verbose) > 0L) {
   cat(paste(rust_verbose, collapse = "\n"), "\n")
 }
+#> rustc 1.91.1 (ed61e7d7e 2025-11-07)
+#> binary: rustc
+#> commit-hash: ed61e7d7e242494fb7057f2657300d9e77bb4fcb
+#> commit-date: 2025-11-07
+#> host: x86_64-unknown-linux-gnu
+#> release: 1.91.1
+#> LLVM version: 21.1.2
 
 if (identical(Sys.info()[["sysname"]], "Linux")) {
   lscpu <- safe_system("lscpu")
@@ -174,11 +185,56 @@ if (identical(Sys.info()[["sysname"]], "Linux")) {
     cat(paste(features, collapse = "\n"), "\n")
   }
 }
+#> Architecture:                         x86_64
+#> CPU op-mode(s):                       32-bit, 64-bit
+#> Address sizes:                        46 bits physical, 48 bits virtual
+#> Byte Order:                           Little Endian
+#> CPU(s):                               20
+#> On-line CPU(s) list:                  0-19
+#> Vendor ID:                            GenuineIntel
+#> BIOS Vendor ID:                       Intel(R) Corporation
+#> Model name:                           13th Gen Intel(R) Core(TM) i5-13500
+#> BIOS Model name:                      13th Gen Intel(R) Core(TM) i5-13500 To Be Filled By O.E.M. CPU @ 2.4GHz
+#> BIOS CPU family:                      205
+#> CPU family:                           6
+#> Model:                                191
+#> Thread(s) per core:                   2
+#> Core(s) per socket:                   14
+#> Socket(s):                            1
+#> Stepping:                             2
+#> CPU(s) scaling MHz:                   31%
+#> CPU max MHz:                          4800.0000
+#> CPU min MHz:                          800.0000
+#> BogoMIPS:                             4992.00
+#> Flags:                                fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm constant_tsc art arch_perfmon pebs bts rep_good nopl xtopology nonstop_tsc cpuid aperfmperf tsc_known_freq pni pclmulqdq dtes64 monitor ds_cpl vmx smx est tm2 ssse3 sdbg fma cx16 xtpr pdcm sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand lahf_lm abm 3dnowprefetch cpuid_fault epb ssbd ibrs ibpb stibp ibrs_enhanced tpr_shadow flexpriority ept vpid ept_ad fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid rdseed adx smap clflushopt clwb intel_pt sha_ni xsaveopt xsavec xgetbv1 xsaves split_lock_detect user_shstk avx_vnni dtherm ida arat pln pts hwp hwp_notify hwp_act_window hwp_epp hwp_pkg_req hfi vnmi umip pku ospke waitpkg gfni vaes vpclmulqdq tme rdpid movdiri movdir64b fsrm md_clear serialize pconfig arch_lbr ibt flush_l1d arch_capabilities
+#> Virtualization:                       VT-x
+#> L1d cache:                            544 KiB (14 instances)
+#> L1i cache:                            704 KiB (14 instances)
+#> L2 cache:                             11.5 MiB (8 instances)
+#> L3 cache:                             24 MiB (1 instance)
+#> NUMA node(s):                         1
+#> NUMA node0 CPU(s):                    0-19
+#> Vulnerability Gather data sampling:   Not affected
+#> Vulnerability Itlb multihit:          Not affected
+#> Vulnerability L1tf:                   Not affected
+#> Vulnerability Mds:                    Not affected
+#> Vulnerability Meltdown:               Not affected
+#> Vulnerability Mmio stale data:        Not affected
+#> Vulnerability Reg file data sampling: Mitigation; Clear Register File
+#> Vulnerability Retbleed:               Not affected
+#> Vulnerability Spec rstack overflow:   Not affected
+#> Vulnerability Spec store bypass:      Mitigation; Speculative Store Bypass disabled via prctl
+#> Vulnerability Spectre v1:             Mitigation; usercopy/swapgs barriers and __user pointer sanitization
+#> Vulnerability Spectre v2:             Mitigation; Enhanced / Automatic IBRS; IBPB conditional; RSB filling; PBRSB-eIBRS SW sequence; BHI BHI_DIS_S
+#> Vulnerability Srbds:                  Not affected
+#> Vulnerability Tsx async abort:        Not affected
+#> SIMD-related CPU flags:
+#> sse sse2 fma sse4_1 sse4_2 avx bmi1 avx2 bmi2 avx_vnni
 ```
 
 ## Benchmark configuration
 
-```{r configuration}
+``` r
 pattern <- "AAGGGGA"
 unit_text <- "CCCCCCCCCAAGGGGACCCCCAAGGCGACCCCCCCCC"
 text <- paste(rep(unit_text, text_multiplier), collapse = "")
@@ -195,11 +251,13 @@ config <- data.frame(
   k = k
 )
 config
+#>   batches iterations_per_batch warmup text_length pattern_length k
+#> 1       7                   50      3       37000              7 1
 ```
 
 ## Benchmark
 
-```{r benchmark}
+``` r
 validate <- function(result, label) {
   required <- c("text_start", "text_end", "pattern_start", "pattern_end", "cost", "strand")
   if (!is.data.frame(result) || !all(required %in% names(result))) {
@@ -278,21 +336,51 @@ message(
   "Benchmarking ", length(benchmarks), " cases; ", batches, " batches x ",
   iterations, " iterations; text length ", nchar(text, type = "bytes"), " bytes."
 )
+#> Benchmarking 6 cases; 7 batches x 50 iterations; text length 37000 bytes.
 results <- do.call(rbind, Map(bench_one, names(benchmarks), benchmarks))
 row.names(results) <- NULL
 results <- results[order(results$median_seconds), ]
 results
+#>                      binding batches iterations_per_batch text_length
+#> 1  Rsassy reusable character       7                   50       37000
+#> 2        Rsassy reusable raw       7                   50       37000
+#> 4        Rsassy one-shot raw       7                   50       37000
+#> 3  Rsassy one-shot character       7                   50       37000
+#> 5 sassyRS one-shot character       7                   50       37000
+#> 6       sassyRS one-shot raw       7                   50       37000
+#>   pattern_length k matches min_seconds median_seconds mean_seconds p95_seconds
+#> 1              7 1    2000     0.00042        0.00042 0.0004200000    0.000420
+#> 2              7 1    2000     0.00042        0.00042 0.0004285714    0.000440
+#> 4              7 1    2000     0.00044        0.00044 0.0004428571    0.000454
+#> 3              7 1    2000     0.00044        0.00044 0.0004400000    0.000440
+#> 5              7 1    2000     0.00062        0.00062 0.0006200000    0.000620
+#> 6              7 1    2000     0.00066        0.00068 0.0006742857    0.000694
+#>   max_seconds calls_per_second
+#> 1     0.00042         2380.952
+#> 2     0.00044         2380.952
+#> 4     0.00046         2272.727
+#> 3     0.00044         2272.727
+#> 5     0.00062         1612.903
+#> 6     0.00070         1470.588
 ```
 
 ## Summary
 
-```{r summary}
+``` r
 summary_table <- results[, c("binding", "median_seconds", "calls_per_second", "matches")]
 summary_table
+#>                      binding median_seconds calls_per_second matches
+#> 1  Rsassy reusable character        0.00042         2380.952    2000
+#> 2        Rsassy reusable raw        0.00042         2380.952    2000
+#> 4        Rsassy one-shot raw        0.00044         2272.727    2000
+#> 3  Rsassy one-shot character        0.00044         2272.727    2000
+#> 5 sassyRS one-shot character        0.00062         1612.903    2000
+#> 6       sassyRS one-shot raw        0.00068         1470.588    2000
 
 dir.create(dirname(output), recursive = TRUE, showWarnings = FALSE)
 utils::write.csv(results, output, row.names = FALSE)
 message("Wrote benchmark results to ", output)
+#> Wrote benchmark results to /root/sassy/r/benchmarks/results/r-bindings.csv
 
 summary_path <- Sys.getenv("GITHUB_STEP_SUMMARY", unset = "")
 if (!identical(summary_path, "")) {

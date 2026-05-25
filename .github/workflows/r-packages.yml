@@ -101,7 +101,24 @@ jobs:
           SASSY_R_BENCH_OUT: benchmark-results/r-bindings.csv
         run: |
           mkdir -p benchmark-results
-          Rscript -e 'rmarkdown::render("r/benchmarks/benchmark-r-bindings.Rmd", params = list(install = TRUE), output_dir = "benchmark-results", output_file = "r-bindings.html", envir = new.env(parent = globalenv()))'
+          Rscript - <<'RSCRIPT'
+          rmarkdown::render(
+            "r/benchmarks/benchmark-r-bindings.Rmd",
+            output_format = "html_document",
+            params = list(install = TRUE),
+            output_dir = "benchmark-results",
+            output_file = "r-bindings.html",
+            envir = new.env(parent = globalenv())
+          )
+          rmarkdown::render(
+            "r/benchmarks/benchmark-r-bindings.Rmd",
+            output_format = "github_document",
+            params = list(install = FALSE),
+            output_dir = "benchmark-results",
+            output_file = "r-bindings.md",
+            envir = new.env(parent = globalenv())
+          )
+          RSCRIPT
 
       - name: Upload benchmark results
         uses: actions/upload-artifact@v4
@@ -110,3 +127,4 @@ jobs:
           path: |
             benchmark-results/r-bindings.csv
             benchmark-results/r-bindings.html
+            benchmark-results/r-bindings.md
