@@ -51,26 +51,26 @@ export RETICULATE_PYTHON="$PWD/.venv-benchmark/bin/python"
 
 | batches | iterations_per_batch | warmup | text_length | pattern_length |   k | inserted_matches | insertion_spacing |
 |--------:|---------------------:|-------:|------------:|---------------:|----:|-----------------:|------------------:|
-|       3 |                    5 |      2 |       1e+06 |             42 |   2 |               10 |             1e+05 |
+|       7 |                   20 |      2 |       1e+06 |             42 |   2 |               10 |             1e+05 |
 
 ## Benchmarked calls
 
 | binding                     | batches | iterations_per_batch | text_length | pattern_length |   k | matches | min_seconds | median_seconds | mean_seconds | p95_seconds | max_seconds | calls_per_second |
 |:----------------------------|--------:|---------------------:|------------:|---------------:|----:|--------:|------------:|---------------:|-------------:|------------:|------------:|-----------------:|
-| Rsassy reusable raw         |       3 |                    5 |       1e+06 |             42 |   2 |      10 |      0.0002 |          2e-04 |    0.0002667 |     0.00038 |      0.0004 |         5000.000 |
-| Rsassy one-shot raw         |       3 |                    5 |       1e+06 |             42 |   2 |      10 |      0.0002 |          2e-04 |    0.0002000 |     0.00020 |      0.0002 |         5000.000 |
-| Rsassy reusable character   |       3 |                    5 |       1e+06 |             42 |   2 |      10 |      0.0002 |          4e-04 |    0.0003333 |     0.00040 |      0.0004 |         2500.000 |
-| Python sassy via reticulate |       3 |                    5 |       1e+06 |             42 |   2 |      10 |      0.0006 |          6e-04 |    0.0006000 |     0.00060 |      0.0006 |         1666.667 |
-| sassyRS one-shot raw        |       3 |                    5 |       1e+06 |             42 |   2 |      10 |      0.0018 |          2e-03 |    0.0020000 |     0.00218 |      0.0022 |          500.000 |
+| Rsassy reusable character   |       7 |                   20 |       1e+06 |             42 |   2 |      10 |     0.00025 |        0.00025 |    0.0002714 |     0.00030 |     0.00030 |         4000.000 |
+| Rsassy reusable raw         |       7 |                   20 |       1e+06 |             42 |   2 |      10 |     0.00025 |        0.00025 |    0.0002714 |     0.00030 |     0.00030 |         4000.000 |
+| Rsassy one-shot raw         |       7 |                   20 |       1e+06 |             42 |   2 |      10 |     0.00025 |        0.00030 |    0.0002929 |     0.00030 |     0.00030 |         3333.333 |
+| sassyRS one-shot raw        |       7 |                   20 |       1e+06 |             42 |   2 |      10 |     0.00045 |        0.00050 |    0.0004786 |     0.00050 |     0.00050 |         2000.000 |
+| Python sassy via reticulate |       7 |                   20 |       1e+06 |             42 |   2 |      10 |     0.00050 |        0.00050 |    0.0005214 |     0.00055 |     0.00055 |         2000.000 |
 
 ## Summary
 
 | binding                     | median_seconds | calls_per_second | matches |
 |:----------------------------|---------------:|-----------------:|--------:|
-| Rsassy reusable raw         |          2e-04 |         5000.000 |      10 |
-| Rsassy one-shot raw         |          2e-04 |         5000.000 |      10 |
-| Rsassy reusable character   |          4e-04 |         2500.000 |      10 |
-| Python sassy via reticulate |          6e-04 |         1666.667 |      10 |
-| sassyRS one-shot raw        |          2e-03 |          500.000 |      10 |
+| Rsassy reusable character   |        0.00025 |         4000.000 |      10 |
+| Rsassy reusable raw         |        0.00025 |         4000.000 |      10 |
+| Rsassy one-shot raw         |        0.00030 |         3333.333 |      10 |
+| sassyRS one-shot raw        |        0.00050 |         2000.000 |      10 |
+| Python sassy via reticulate |        0.00050 |         2000.000 |      10 |
 
     #> Wrote benchmark results to /root/sassy/r/benchmarks/results/r-bindings.csv
