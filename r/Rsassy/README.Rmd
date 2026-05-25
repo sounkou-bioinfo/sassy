@@ -4,6 +4,10 @@ output: github_document
 
 <!-- README.md is generated from README.Rmd. Please edit that file. -->
 
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
 # Rsassy
 
 R bindings to Sassy using R's native C API.
@@ -20,7 +24,7 @@ Requirements: Cargo, `rustc >= 1.91`, and `xz`.
 
 ## Usage
 
-```r
+```{r}
 library(Rsassy)
 
 pattern <- charToRaw("ATCGATCG")
@@ -28,7 +32,7 @@ text <- charToRaw("GGGGATCGATCGTTTT")
 
 searcher <- sassy_searcher("dna") # "ascii", "dna", or "iupac"
 matches <- sassy_searcher_search(searcher, pattern, text, k = 1)
-print(matches)
+matches
 ```
 
 `matches` is a data frame with 0-based, half-open coordinates:
@@ -36,22 +40,28 @@ print(matches)
 
 One-shot use:
 
-```r
+```{r}
 sassy_search(pattern, text, k = 1, alphabet = "dna")
 ```
 
 R strings are also accepted:
 
-```r
+```{r}
 sassy_search("ATCGATCG", "GGGGATCGATCGTTTT", k = 1, alphabet = "dna")
 ```
 
 Open R connections can be searched without an R-level read loop:
 
-```r
-con <- gzfile("reads.fa.gz", "rb")
+```{r}
+tmp <- tempfile(fileext = ".gz")
+con <- gzfile(tmp, "wb")
+writeBin(charToRaw("GGGGATCGATCGTTTT"), con)
+close(con)
+
+con <- gzfile(tmp, "rb")
 sassy_search_connection("ATCG", con, k = 1, alphabet = "dna")
 close(con)
+unlink(tmp)
 ```
 
 ## Check
