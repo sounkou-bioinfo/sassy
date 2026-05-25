@@ -1,0 +1,16 @@
+Package: Rsassy
+Title: R Bindings to the 'sassy' Approximate String Matcher
+Version: 0.0.0.9000
+Authors@R: c(
+    person("Sassy", "Contributors", email = "maintainer@example.com", role = c("aut", "cre")),
+    person("Rick", "Beeloo", role = c("ctb", "cph")),
+    person("Ragnar", "Groot Koerkamp", role = c("ctb", "cph"))
+  )
+Description: Provides R bindings to the 'sassy' Rust crate for fast approximate string matching over ASCII, DNA, and IUPAC sequences. The package uses R's native C API as the boundary so raw-vector and future 'ALTREP' access can be handled explicitly.
+License: MIT + file LICENSE
+Encoding: UTF-8
+SystemRequirements: Cargo (Rust's package manager), rustc >= 1.91.0, xz
+Suggests:
+    tinytest
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3

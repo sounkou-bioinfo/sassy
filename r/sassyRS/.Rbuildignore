@@ -1,0 +1,9 @@
+^\.Rproj\.user$
+^\.vscode$
+^cran-comments\.md$
+^src/\.cargo$
+^src/vendor$
+^src/rust/vendor$
+^src/rust/target$
+^src/Makevars$
+^src/Makevars\.win$

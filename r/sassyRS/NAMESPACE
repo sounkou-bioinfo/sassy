@@ -1,0 +1,3 @@
+useDynLib(sassyRS, .registration = TRUE)
+export(sassy_search)
+export(sassy_search_all)

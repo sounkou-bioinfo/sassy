@@ -1,0 +1,112 @@
+name: R packages
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  r-cmd-check:
+    name: R CMD check (${{ matrix.package.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - name: Rsassy
+            path: r/Rsassy
+          - name: sassyRS
+            path: r/sassyRS
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xz-utils
+
+      - name: Install R test dependencies
+        shell: Rscript {0}
+        run: |
+          install.packages("tinytest")
+
+      - name: Build source package
+        run: |
+          R CMD build "${{ matrix.package.path }}"
+          tarball="$(ls -t ${{ matrix.package.name }}_*.tar.gz | head -n 1)"
+          echo "TARBALL=${tarball}" >> "${GITHUB_ENV}"
+
+      - name: Check source package
+        run: R CMD check --no-manual --no-vignettes "${TARBALL}"
+
+      - name: Upload check artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r-cmd-check-${{ matrix.package.name }}
+          path: |
+            ${{ matrix.package.name }}.Rcheck
+            ${{ matrix.package.name }}_*.tar.gz
+
+  benchmark-r-bindings:
+    name: Benchmark Rsassy vs sassyRS
+    runs-on: ubuntu-latest
+    needs: r-cmd-check
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up Pandoc
+        uses: r-lib/actions/setup-pandoc@v2
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xz-utils
+
+      - name: Install R benchmark dependencies
+        shell: Rscript {0}
+        run: |
+          install.packages(c("tinytest", "rmarkdown"))
+
+      - name: Run binding benchmark report
+        env:
+          NOT_CRAN: "true"
+          RUSTFLAGS: "-C target-cpu=native"
+          SASSY_RUST_FEATURES: native-simd
+          SASSY_R_BENCH_BATCHES: 5
+          SASSY_R_BENCH_ITERS: 25
+          SASSY_R_BENCH_TEXT_MULTIPLIER: 500
+          SASSY_R_BENCH_OUT: benchmark-results/r-bindings.csv
+        run: |
+          mkdir -p benchmark-results
+          Rscript -e 'rmarkdown::render("r/benchmarks/benchmark-r-bindings.Rmd", params = list(install = TRUE), output_dir = "benchmark-results", output_file = "r-bindings.html", envir = new.env(parent = globalenv()))'
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: r-binding-benchmark
+          path: |
+            benchmark-results/r-bindings.csv
+            benchmark-results/r-bindings.html

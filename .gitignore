@@ -16,3 +16,6 @@ c/sassy_example
 /evals/src/sassy1/figs/*
 /evals/src/sassy2/data/downloaded/*
 python/sassy/__init__.pyi
+/r/benchmarks/results/
+*.tar.gz
+*.Rcheck/

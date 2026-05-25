@@ -1,0 +1,319 @@
+---
+title: "Rsassy vs sassyRS benchmark"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+params:
+  install: false
+  batches: 7
+  iterations: 50
+  text_multiplier: 1000
+  warmup: 3
+  output: "r/benchmarks/results/r-bindings.csv"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+This report benchmarks the two R bindings in this repository:
+
+- **Rsassy**: a C/R API boundary intended for explicit raw-vector and future ALTREP access.
+- **sassyRS**: an `extendr` boundary prototype.
+
+The benchmark uses a fixed DNA pattern and target text, then reports elapsed seconds per call.
+
+```{r helpers}
+get_int_env <- function(name, default) {
+  value <- Sys.getenv(name, unset = "")
+  if (identical(value, "")) {
+    return(as.integer(default))
+  }
+  value <- suppressWarnings(as.integer(value))
+  if (is.na(value) || value <= 0L) {
+    stop(name, " must be a positive integer", call. = FALSE)
+  }
+  value
+}
+
+is_absolute_path <- function(path) {
+  grepl("^/", path) || grepl("^[A-Za-z]:[/\\\\]", path)
+}
+
+find_repo_root <- function(start) {
+  path <- normalizePath(start, mustWork = TRUE)
+  repeat {
+    if (file.exists(file.path(path, "Cargo.toml")) && dir.exists(file.path(path, "r"))) {
+      return(path)
+    }
+    parent <- dirname(path)
+    if (identical(parent, path)) {
+      stop("Could not locate repository root from ", start, call. = FALSE)
+    }
+    path <- parent
+  }
+}
+
+input <- knitr::current_input()
+input_dir <- if (!is.null(input) && file.exists(input)) dirname(normalizePath(input)) else getwd()
+repo_root <- find_repo_root(input_dir)
+
+batches <- get_int_env("SASSY_R_BENCH_BATCHES", params$batches)
+iterations <- get_int_env("SASSY_R_BENCH_ITERS", params$iterations)
+text_multiplier <- get_int_env("SASSY_R_BENCH_TEXT_MULTIPLIER", params$text_multiplier)
+warmup <- get_int_env("SASSY_R_BENCH_WARMUP", params$warmup)
+output <- Sys.getenv("SASSY_R_BENCH_OUT", params$output)
+if (!is_absolute_path(output)) {
+  output <- file.path(repo_root, output)
+}
+
+run <- function(cmd, args) {
+  message("$ ", cmd, " ", paste(args, collapse = " "))
+  status <- system2(cmd, args)
+  if (!identical(status, 0L)) {
+    stop("Command failed: ", cmd, call. = FALSE)
+  }
+}
+```
+
+## Package setup
+
+```{r package-setup}
+if (isTRUE(params$install)) {
+  bench_lib <- tempfile("sassy-r-bindings-lib-")
+  dir.create(bench_lib, recursive = TRUE)
+  .libPaths(c(bench_lib, .libPaths()))
+  message("Installing benchmark packages into ", bench_lib)
+  run(file.path(R.home("bin"), "R"), c("CMD", "INSTALL", "-l", bench_lib, file.path(repo_root, "r", "Rsassy")))
+  run(file.path(R.home("bin"), "R"), c("CMD", "INSTALL", "-l", bench_lib, file.path(repo_root, "r", "sassyRS")))
+}
+
+if (!requireNamespace("Rsassy", quietly = TRUE)) {
+  stop("Package 'Rsassy' is not installed. Render with params = list(install = TRUE).", call. = FALSE)
+}
+if (!requireNamespace("sassyRS", quietly = TRUE)) {
+  stop("Package 'sassyRS' is not installed. Render with params = list(install = TRUE).", call. = FALSE)
+}
+```
+
+## Machine and build details
+
+The benchmark workflow sets `RUSTFLAGS=-C target-cpu=native` and
+`SASSY_RUST_FEATURES=native-simd` so the Rust crates are compiled for the
+runner CPU instead of the portable scalar fallback used for CRAN-style checks.
+
+```{r machine-details}
+safe_system <- function(cmd, args = character()) {
+  if (!nzchar(Sys.which(cmd))) {
+    return(character())
+  }
+  out <- tryCatch(system2(cmd, args, stdout = TRUE, stderr = TRUE), error = function(e) character())
+  out[!is.na(out)]
+}
+
+machine <- data.frame(
+  field = c(
+    "system",
+    "release",
+    "machine",
+    "R",
+    "platform",
+    "NOT_CRAN",
+    "RUSTFLAGS",
+    "SASSY_RUST_FEATURES",
+    "cargo",
+    "rustc"
+  ),
+  value = c(
+    unname(Sys.info()[["sysname"]]),
+    unname(Sys.info()[["release"]]),
+    unname(Sys.info()[["machine"]]),
+    R.version.string,
+    R.version$platform,
+    Sys.getenv("NOT_CRAN", unset = ""),
+    Sys.getenv("RUSTFLAGS", unset = ""),
+    Sys.getenv("SASSY_RUST_FEATURES", unset = ""),
+    paste(safe_system("cargo", "--version"), collapse = "\n"),
+    paste(safe_system("rustc", "--version"), collapse = "\n")
+  ),
+  stringsAsFactors = FALSE
+)
+machine
+
+rust_verbose <- safe_system("rustc", "-vV")
+if (length(rust_verbose) > 0L) {
+  cat(paste(rust_verbose, collapse = "\n"), "\n")
+}
+
+if (identical(Sys.info()[["sysname"]], "Linux")) {
+  lscpu <- safe_system("lscpu")
+  if (length(lscpu) > 0L) {
+    cat(paste(lscpu, collapse = "\n"), "\n")
+  }
+  cpuinfo <- "/proc/cpuinfo"
+  if (file.exists(cpuinfo)) {
+    flags <- grep("^(flags|Features)[[:space:]]*:", readLines(cpuinfo, warn = FALSE), value = TRUE)[1]
+    if (!is.na(flags)) {
+      simd_flags <- unlist(strsplit(sub("^[^:]+:[[:space:]]*", "", flags), "[[:space:]]+"), use.names = FALSE)
+      simd_flags <- grep("^(sse|avx|fma|bmi|neon|asimd)", simd_flags, value = TRUE)
+      cat("SIMD-related CPU flags:\n", paste(simd_flags, collapse = " "), "\n", sep = "")
+    }
+  }
+} else if (identical(Sys.info()[["sysname"]], "Darwin")) {
+  sysctl <- safe_system("sysctl", c("-n", "machdep.cpu.brand_string"))
+  if (length(sysctl) > 0L) {
+    cat("CPU: ", paste(sysctl, collapse = " "), "\n", sep = "")
+  }
+  features <- safe_system("sysctl", c("-a"))
+  features <- grep("machdep.cpu.features|machdep.cpu.leaf7_features", features, value = TRUE)
+  if (length(features) > 0L) {
+    cat(paste(features, collapse = "\n"), "\n")
+  }
+}
+```
+
+## Benchmark configuration
+
+```{r configuration}
+pattern <- "AAGGGGA"
+unit_text <- "CCCCCCCCCAAGGGGACCCCCAAGGCGACCCCCCCCC"
+text <- paste(rep(unit_text, text_multiplier), collapse = "")
+raw_pattern <- charToRaw(pattern)
+raw_text <- charToRaw(text)
+k <- 1L
+
+config <- data.frame(
+  batches = batches,
+  iterations_per_batch = iterations,
+  warmup = warmup,
+  text_length = nchar(text, type = "bytes"),
+  pattern_length = nchar(pattern, type = "bytes"),
+  k = k
+)
+config
+```
+
+## Benchmark
+
+```{r benchmark}
+validate <- function(result, label) {
+  required <- c("text_start", "text_end", "pattern_start", "pattern_end", "cost", "strand")
+  if (!is.data.frame(result) || !all(required %in% names(result))) {
+    stop(label, " did not return the expected matches data frame", call. = FALSE)
+  }
+  if (nrow(result) <= 0L) {
+    stop(label, " returned no matches on benchmark input", call. = FALSE)
+  }
+  invisible(result)
+}
+
+bench_one <- function(label, fun) {
+  for (i in seq_len(warmup)) {
+    validate(fun(), label)
+  }
+
+  gc()
+  seconds_per_call <- numeric(batches)
+  match_count <- NA_integer_
+
+  for (batch in seq_len(batches)) {
+    last <- NULL
+    elapsed <- system.time({
+      for (i in seq_len(iterations)) {
+        last <- fun()
+      }
+    })[["elapsed"]]
+    validate(last, label)
+    match_count <- nrow(last)
+    seconds_per_call[[batch]] <- elapsed / iterations
+  }
+
+  data.frame(
+    binding = label,
+    batches = batches,
+    iterations_per_batch = iterations,
+    text_length = nchar(text, type = "bytes"),
+    pattern_length = nchar(pattern, type = "bytes"),
+    k = k,
+    matches = match_count,
+    min_seconds = min(seconds_per_call),
+    median_seconds = unname(stats::median(seconds_per_call)),
+    mean_seconds = mean(seconds_per_call),
+    p95_seconds = unname(stats::quantile(seconds_per_call, probs = 0.95, names = FALSE)),
+    max_seconds = max(seconds_per_call),
+    calls_per_second = 1 / unname(stats::median(seconds_per_call)),
+    stringsAsFactors = FALSE
+  )
+}
+
+rsassy_searcher_chr <- Rsassy::sassy_searcher("dna", rc = FALSE)
+rsassy_searcher_raw <- Rsassy::sassy_searcher("dna", rc = FALSE)
+
+benchmarks <- list(
+  "Rsassy reusable character" = function() {
+    Rsassy::sassy_searcher_search(rsassy_searcher_chr, pattern, text, k)
+  },
+  "Rsassy reusable raw" = function() {
+    Rsassy::sassy_searcher_search(rsassy_searcher_raw, raw_pattern, raw_text, k)
+  },
+  "Rsassy one-shot character" = function() {
+    Rsassy::sassy_search(pattern, text, k, alphabet = "dna", rc = FALSE)
+  },
+  "Rsassy one-shot raw" = function() {
+    Rsassy::sassy_search(raw_pattern, raw_text, k, alphabet = "dna", rc = FALSE)
+  },
+  "sassyRS one-shot character" = function() {
+    sassyRS::sassy_search(pattern, text, k, alphabet = "dna", rc = FALSE)
+  },
+  "sassyRS one-shot raw" = function() {
+    sassyRS::sassy_search(raw_pattern, raw_text, k, alphabet = "dna", rc = FALSE)
+  }
+)
+
+message(
+  "Benchmarking ", length(benchmarks), " cases; ", batches, " batches x ",
+  iterations, " iterations; text length ", nchar(text, type = "bytes"), " bytes."
+)
+results <- do.call(rbind, Map(bench_one, names(benchmarks), benchmarks))
+row.names(results) <- NULL
+results <- results[order(results$median_seconds), ]
+results
+```
+
+## Summary
+
+```{r summary}
+summary_table <- results[, c("binding", "median_seconds", "calls_per_second", "matches")]
+summary_table
+
+dir.create(dirname(output), recursive = TRUE, showWarnings = FALSE)
+utils::write.csv(results, output, row.names = FALSE)
+message("Wrote benchmark results to ", output)
+
+summary_path <- Sys.getenv("GITHUB_STEP_SUMMARY", unset = "")
+if (!identical(summary_path, "")) {
+  lines <- c(
+    "## Rsassy vs sassyRS benchmark",
+    "",
+    sprintf("Machine: `%s %s (%s)`.", Sys.info()[["sysname"]], Sys.info()[["release"]], Sys.info()[["machine"]]),
+    sprintf("Rust: `%s`; cargo: `%s`.", machine$value[machine$field == "rustc"], machine$value[machine$field == "cargo"]),
+    sprintf("Build flags: `RUSTFLAGS=%s`; `SASSY_RUST_FEATURES=%s`.", Sys.getenv("RUSTFLAGS", unset = ""), Sys.getenv("SASSY_RUST_FEATURES", unset = "")),
+    sprintf("Text length: `%s` bytes; pattern length: `%s`; k: `%s`.", nchar(text, type = "bytes"), nchar(pattern, type = "bytes"), k),
+    sprintf("Each row reports the median over `%s` batches of `%s` calls.", batches, iterations),
+    "",
+    "| Binding | Median seconds/call | Calls/second | Matches |",
+    "|---|---:|---:|---:|",
+    sprintf(
+      "| %s | %.6f | %.2f | %d |",
+      results$binding,
+      results$median_seconds,
+      results$calls_per_second,
+      results$matches
+    ),
+    "",
+    sprintf("CSV artifact: `%s`", output)
+  )
+  writeLines(lines, summary_path, useBytes = TRUE)
+}
+```

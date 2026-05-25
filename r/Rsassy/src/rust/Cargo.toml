@@ -1,0 +1,26 @@
+[package]
+name = "rsassy-rust"
+publish = false
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.91"
+
+[lib]
+name = "rsassy_rust"
+crate-type = ["staticlib"]
+
+[features]
+default = ["portable"]
+# Portable/CRAN-safe fallback. The benchmark workflow disables this and uses
+# `native-simd` with `RUSTFLAGS=-C target-cpu=native`.
+portable = ["sassy/scalar"]
+native-simd = []
+
+[dependencies]
+sassy = { version = "0.2.1", default-features = false }
+
+[profile.release]
+lto = true
+codegen-units = 1
+
+[workspace]

@@ -1,0 +1,2 @@
+#!/bin/sh
+rm -Rf src/.cargo src/vendor src/rust/target src/Makevars.win src/*.o src/*.dll
