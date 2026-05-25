@@ -315,10 +315,11 @@ See [python/README.md](python/README.md) for more details.
 
 Two experimental R packages are available in [`r/`](r/):
 
-- [`Rsassy`](r/Rsassy): R bindings through R's native C API. This boundary is
-  intended for explicit raw-vector handling and future ALTREP-aware paths.
+- [`Rsassy`](r/Rsassy): R bindings through R's native C API, including explicit
+  raw-vector access and native connection streaming.
 - [`sassyRS`](r/sassyRS): an [`extendr`](https://extendr.github.io/) prototype
-  exposing a similar data-frame interface from Rust.
+  exposing a similar data-frame interface from Rust, with raw-vector input
+  passed through an ALTREP-compatible R/extendr access path.
 
 Both packages require Cargo, `rustc >= 1.91`, and `xz`. For a portable
 CRAN-style build, install directly from the package directory:

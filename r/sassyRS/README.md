@@ -45,8 +45,10 @@ sassy_search(
 #> 1          2        6             0           4    0      +
 ```
 
-Raw vectors are accepted by the R wrapper and converted for the
-`extendr` call:
+Raw vectors are passed through to Rust as raw bytes. The Rust side
+accepts raw and string `Robj`s directly and uses extendr/R ALTREP-aware
+accessors for raw vectors rather than converting raw input to an R
+string first:
 
 ``` r
 sassy_search(

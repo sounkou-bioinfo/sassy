@@ -22,6 +22,7 @@ native-simd = []
 
 [dependencies]
 extendr-api = "0.9.0"
+extendr-ffi = "0.9.0"
 sassy = { version = "0.2.1", default-features = false }
 
 [profile.release]

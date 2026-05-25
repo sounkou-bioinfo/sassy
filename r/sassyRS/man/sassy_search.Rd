@@ -11,7 +11,7 @@ sassy_search_all(pattern, text, k, alphabet = c("dna", "iupac", "ascii"),
   rc = TRUE, alpha = NULL)
 }
 \arguments{
-\item{pattern, text}{Raw vectors or character scalars containing the query and target text.}
+\item{pattern, text}{Raw vectors or character scalars containing the query and target text. Raw vectors are passed through to Rust as raw bytes; ALTREP raw vectors are accepted through extendr/R's ALTREP-aware data pointer path.}
 \item{k}{Maximum edit distance.}
 \item{alphabet}{Alphabet profile. One of \code{"dna"}, \code{"iupac"}, or \code{"ascii"}.}
 \item{rc}{If \code{TRUE}, search reverse-complement strand as well where supported.}

@@ -1,6 +1,6 @@
-as_sassyrs_string <- function(x, arg) {
+as_sassyrs_sequence <- function(x, arg) {
   if (is.raw(x)) {
-    return(rawToChar(x))
+    return(x)
   }
   if (!is.character(x) || length(x) != 1L || is.na(x)) {
     stop(arg, " must be a raw vector or a non-missing character scalar", call. = FALSE)
@@ -32,6 +32,8 @@ check_sassyrs_alpha <- function(alpha) {
 #' Search approximate matches with 'sassy'
 #'
 #' @param pattern,text Raw vectors or character scalars containing the query and target text.
+#'   Raw vectors are passed through to Rust as raw bytes; ALTREP raw vectors are
+#'   accepted through extendr/R's ALTREP-aware data pointer path.
 #' @param k Maximum edit distance.
 #' @param alphabet Alphabet profile. One of `"dna"`, `"iupac"`, or `"ascii"`.
 #' @param rc If `TRUE`, search reverse-complement strand as well where supported.
@@ -42,8 +44,8 @@ check_sassyrs_alpha <- function(alpha) {
 sassy_search <- function(pattern, text, k, alphabet = c("dna", "iupac", "ascii"), rc = TRUE, alpha = NULL, all = FALSE) {
   alphabet <- match.arg(alphabet)
   out <- rs_search(
-    as_sassyrs_string(pattern, "pattern"),
-    as_sassyrs_string(text, "text"),
+    as_sassyrs_sequence(pattern, "pattern"),
+    as_sassyrs_sequence(text, "text"),
     check_sassyrs_k(k),
     alphabet,
     isTRUE(rc),

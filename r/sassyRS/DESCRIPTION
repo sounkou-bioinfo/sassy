@@ -7,7 +7,7 @@ Authors@R: c(
     person("Rick", "Beeloo", role = c("ctb", "cph")),
     person("Ragnar", "Groot Koerkamp", role = c("ctb", "cph"))
   )
-Description: Provides prototype R bindings to the 'sassy' Rust crate using 'extendr'. It exposes a simple data-frame interface for approximate matching while the lower-level 'Rsassy' package can use R's native C API for explicit raw-vector and 'ALTREP' handling.
+Description: Provides prototype R bindings to the 'sassy' Rust crate using 'extendr'. It exposes a simple data-frame interface for approximate matching and passes raw-vector input to Rust through R/extendr data accessors, including 'ALTREP' raw-vector compatibility.
 License: MIT + file LICENSE
 Encoding: UTF-8
 SystemRequirements: Cargo (Rust's package manager), rustc >= 1.91.0, xz
